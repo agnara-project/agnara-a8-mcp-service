@@ -1,18 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "agnara-a8-mcp-service"
 version = "0.1.0"
-description = "Validation project for Agnara 0.1.0a8 MCP capabilities"
+description = "Agnara 0.1.0a8 MCP Validation Project"
+readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "agnara==0.1.0a8",
+    "agnara-mcp==0.1.0a8",
+    "mcp==2.1.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "pytest-asyncio",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "build",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[project.urls]
+Homepage = "https://github.com/agnara-project/agnara-a8-mcp-service"
+Repository = "https://github.com/agnara-project/agnara-a8-mcp-service.git"

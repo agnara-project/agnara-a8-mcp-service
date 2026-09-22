@@ -1,64 +1,70 @@
-# Agnara 0.1.0a8 MCP Service Validation
+# agnara-a8-mcp-service
 
-This repository is a validation project for [Agnara 0.1.0a8](https://pypi.org/project/agnara/), specifically testing the ability to expose Agnara capabilities to Model Context Protocol (MCP) consumers while maintaining kernel contracts, policies, and outcomes.
+**Ecosystem Role:** MCP Validation Project  
+**Target:** `agnara==0.1.0a8`  
+**Adapter:** `agnara-mcp==0.1.0a8`  
+**MCP SDK baseline:** `2.1.1`  
+**Python:** `>=3.14`
 
-## Project Overview
+This repository serves as a **historical, reproducible validation** of the official MCP adapter shipped alongside Agnara 0.1.0a8 (`agnara-mcp==0.1.0a8`). It demonstrates how an external consumer natively exposes Agnara capabilities to Model Context Protocol consumers over the `stdio` transport.
 
-This project implements an **Inventory & Catalog** service with the following capabilities:
-- `inventory.read`: Read product details.
-- `inventory.stock`: Query product stock.
-- `inventory.reserve`: Reserve stock (governed by the `inventory:write` scope policy).
+## Qué valida
 
-It uses Agnara's `Agnara.compile()` to dynamically extract declared capabilities, build `ExecutionPlan`s, and map them to MCP tools using the standard Python `mcp` SDK.
+Este proyecto verifica y demuestra el funcionamiento correcto de las siguientes APIs públicas de `agnara-mcp` bajo `0.1.0a8`:
+- **Discovery:** Declaración de capabilities mediante `@app.capability()` y su exposición explícita mediante `Mcp(...).tool(...)`.
+- **Compilación de Esquemas:** Extracción y compilación segura a través de `FrozenMcpTools` preservando proyecciones de tipos y contratos (schemas).
+- **Ejecución MCP Real:** Routing a través de `mcp.server.Server` mediante `build_mcp_server`, validando `tools/list` y `tools/call`.
+- **Fidelidad del Kernel:** Demostración de Canonical Outcomes (`Success`/`Failure`) desde la ejecución del runtime (`agnara.execution.runtime.invoke`).
+- **Seguridad (Fail-Closed):** Comportamiento anónimo verificado mediante la carencia de identidad en el transporte `stdio`. `McpAuthorization` falla (cerrado por defecto) al solicitar capacidades restringidas (ej. scope `inventory:write`).
 
-## Gap Documented
+## Qué NO valida
 
-**Agnara 0.1.0a8 does not ship with a native MCP adapter.**
-We investigated `agnara`, `agnara.exposure`, and other submodules and confirmed the absence of any built-in MCP integration. As per the validation constraints (*"No envolver Agnara con una implementación paralela para esconder gaps"*), we did not simulate a fake framework adapter. Instead, we built a raw integration (`server.py`) using the official `mcp` package that hooks directly into Agnara's `ExecutionPlan` and `invoke` lifecycle. This serves as a minimal reproducible case for how an MCP adapter should be integrated once provided by the framework, and highlights the gap.
+- Escalabilidad o transaccionalidad de bases de datos de inventario.
+- Mecanismos de autenticación HTTP/SSE (OAuth2/OIDC, tokens). El protocolo validado es exclusivamente `stdio` como proxy local anónimo.
+- Migraciones a versiones de Agnara superiores a 0.1.0a8.
 
-## Release Validation
+## Architecture
 
-- **Agnara Version Evaluated:** `0.1.0a8` (installed exactly from PyPI)
-- **Python Version Required:** `>=3.14`
-- **Installed Packages:** `agnara==0.1.0a8`, `mcp==2.2.0`, `pytest`, `pytest-asyncio`
+Please review [ARCHITECTURE.md](ARCHITECTURE.md) for a technical breakdown of the integration between `agnara`, `agnara-mcp`, and the official Python `mcp` SDK.
 
-### Reproducible Commands
-
-To set up the environment and run the validation:
+## Quick Start
 
 ```powershell
-# 1. Create and activate a Python 3.14 virtual environment
+# 1. Create a Python 3.14 virtual environment
 py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# 2. Install dependencies
+# 2. Install from the locked baseline dependencies
 pip install -e .[dev]
-pip install mcp==2.2.0
 
-# 3. Run the automated tests to verify capability discovery, schema mapping, and policy enforcement
-pytest tests/
+# 3. Run the quality gates
+pytest -v
 
-# 4. Run the executable test client
-python test_client.py
+# 4. Run the interactive smoke client
+python examples/smoke_client.py
 ```
 
-### Findings
+## Quality Gates
 
-1. **Capability Discovery:** `Agnara.compile()` returns a `FrozenCapabilityRegistry`. We can successfully iterate over the capabilities to map them into MCP tools.
-2. **Typed Schemas:** By compiling an `ExecutionPlan`, we can extract `plan.input_schemas` which are Agnara `TypeSchema` objects. Their `.json_schema()` method perfectly bridges into MCP's `inputSchema` requirements.
-3. **Policies & Scopes:** Agnara's policy engine (evaluated within `invoke()`) works flawlessly. When an MCP invocation lacks the `inventory:write` scope, the kernel rightfully raises a `PolicyDeniedError`.
-4. **Invocation Parity:** Direct invocation using `agnara.execution.runtime.invoke()` successfully runs the handlers and returns identical outcomes as if it were directly executed, maintaining the kernel contracts.
+The continuous integration pipeline guarantees the integrity of this validation:
+- `python -m pip check`
+- `ruff format --check .`
+- `ruff check .`
+- `pytest -v`
+- `python examples/smoke_client.py`
+- `python -m build`
+- A clean isolated installation verification of the generated wheel.
 
-### Limitations & Gaps
+## Findings reales de A8
 
-1. **No Native MCP Adapter:** Agnara 0.1.0a8 currently delegates the transport adaptation to the developer. The developer must manually translate `CapabilityDefinition` to MCP `Tool`, handle JSON-RPC mapping, and manage `ExecutionContext`.
-2. **Principal Resolution in Stdio:** Because MCP over `stdio` lacks HTTP headers or session auth, resolving the authenticated `Principal` required injecting a simulated parameter (`__admin__`) into the MCP tool schema to test policy denial/success. A native adapter might need to define a standard for contextual metadata transport.
-3. **Schema Instantiation:** Native MCP models strictly enforce schemas. `PaginatedRequestParams` or `dict` must be passed correctly into the MCP Handlers to avoid Pydantic validation errors when mapping the requests.
+1. **Paridad Total de Esquemas:** La transformación desde las anotaciones nativas de Python procesadas por Agnara hacia `Tool.inputSchema` mediante el `Mcp` adapter es fluida y transparente, sin requerir re-declaraciones redundantes.
+2. **Autorización y Discovery Dinámico:** La política de `McpAuthorization` realiza un filtro inteligente sobre el discovery. Si el request no posee una identidad verificada (como ocurre en `stdio`), las tools con `scopes` requeridos (ej. `inventory.reserve`) ni siquiera aparecen en la respuesta de `tools/list`, previniendo exposición innecesaria de superficie de ataque.
+3. **Canonical Outcomes Projectables:** Los resultados y errores de políticas producidos dentro de la capa de invocación de Agnara (`agnara.execution.runtime.invoke`) se adaptan correctamente al formato de `CallToolResult.is_error` y mensajes JSON de `forbidden`.
 
-## Repository Structure
+## Limitaciones reales
 
-- `pyproject.toml`: Exact versions and build configuration.
-- `src/agnara_a8_mcp_service/server.py`: The executable MCP Server leveraging Agnara's execution plan.
-- `test_client.py`: The test client simulating an LLM interacting with the tools.
-- `tests/test_server.py`: Automated pytest suite.
-- `.github/workflows/ci.yml`: CI configuration for validation.
+1. **Identidad en Stdio:** El protocolo `stdio` provisto por el SDK oficial no incluye mecanismos estandarizados para transmitir tokens de autorización. En consecuencia, el `McpAuthorization` actúa en modo anónimo (fail-closed), lo que requiere otros transportes (como `SSE` o mecanismos propietarios) si se desea validar políticas gobernadas de lectura/escritura bajo identidad.
+
+## Relación con Agnara
+
+Este proyecto es estrictamente consumidor de `agnara` y `agnara-mcp`. Funciona como prueba de caja negra (black-box) del adaptador lanzado en `0.1.0a8` y sirve como artefacto congelado para asegurar las promesas de backward compatibility de dicho ecosistema.

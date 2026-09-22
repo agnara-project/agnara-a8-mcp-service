@@ -19,6 +19,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
-          pip install mcp
-      - name: Run tests
-        run: pytest tests/
+      - name: Quality Gates
+        run: |
+          python -m pip check
+          ruff format --check .
+          ruff check .
+          pytest -v
+          python examples/smoke_client.py
+          python -m build
+      - name: Test Clean Installation
+        run: |
+          python -m venv test_env
+          source test_env/bin/activate
+          pip install dist/*.whl
+          python -c "import agnara_a8_mcp_service.server"
