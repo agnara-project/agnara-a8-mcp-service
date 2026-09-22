@@ -1,9 +1,8 @@
 import asyncio
 
 from agnara import Agnara, App, Principal
-from agnara.core.di.registry import DIRegistry
-from agnara.core.di.resolver import DIContainer
-from agnara.execution.plan import ExecutionPlan
+from agnara.core.di import DIContainer, DIRegistry
+from agnara.execution import ExecutionPlan
 from agnara_mcp import Mcp, McpAuthenticatedIdentity, McpAuthorization, build_mcp_server
 from mcp.server.stdio import stdio_server
 
